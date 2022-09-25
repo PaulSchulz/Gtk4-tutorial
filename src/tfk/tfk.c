@@ -12,13 +12,13 @@ float m_line_width = 0.05;
 #define KEY_SEEN     1
 #define KEY_RELEASED 2
 
-enum Keytype{
-  KEY_UP,
-  KEY_DOWN,
-  KEY_LEFT,
-  KEY_RIGHT,
-  KEY_SPACE,
-  KEY_MAX
+enum Keytype {
+    KEY_UP,
+    KEY_DOWN,
+    KEY_LEFT,
+    KEY_RIGHT,
+    KEY_SPACE,
+    KEY_MAX
 };
 
 unsigned char key[KEY_MAX];
@@ -26,6 +26,25 @@ unsigned char key[KEY_MAX];
 //////////////////////////////////////////////////////////////////////////////
 static void
 draw_arrows (GtkDrawingArea *area, cairo_t *cr, int width, int height, gpointer user_data) {
+
+    // Scale to unit square and translate (0, 0) to be (0.5, 0.5), i.e.
+    // the center of the window
+    cairo_scale(cr, width, height);
+    cairo_translate(cr, 0.5, 0.5);
+
+    // Set the line width and save the cairo drawing state.
+    cairo_set_line_width(cr, m_line_width);
+    cairo_save(cr);
+
+    // Set the background to a slightly transparent green.
+    cairo_set_source_rgba(cr, 0.337, 0.612, 0.117, 0.9);   // green
+    cairo_paint(cr);
+
+    if (key[0] ==  3) {
+        cairo_set_source_rgba(cr, 1.0, 0.0, 0.0, 1.0);
+        cairo_paint(cr);
+    }
+
 
 }
 
@@ -41,9 +60,6 @@ draw_clock (GtkDrawingArea *area, cairo_t *cr, int width, int height, gpointer u
     cairo_set_line_width(cr, m_line_width);
     cairo_save(cr);
 
-    // Set the background to a slightly transparent green.
-    cairo_set_source_rgba(cr, 0.337, 0.612, 0.117, 0.9);   // green
-    cairo_paint(cr);
 
     // Resore back to precious drawing state and draw the circular path
     // representing the clockface. Save this state (including the path) so we
@@ -167,11 +183,19 @@ draw_clock (GtkDrawingArea *area, cairo_t *cr, int width, int height, gpointer u
 
 //////////////////////////////////////////////////////////////////////////////
 // --- keyboard ---
+void
+debug_keytype(guint keyval, guint keytype)
+{
+    printf("key_pressed: %5d %d / ", keyval, keytype);
+    printf("key[]: %d %d %d %d %d\n",
+           key[0], key[1], key[2], key[3], key[4]);
+}
 
-static int keyval_to_keytype(guint keyval)
+static int
+keyval_to_keytype(guint keyval)
 {
   if(keyval == GDK_KEY_Left)
-    return KEY_LEFT;
+      return KEY_LEFT;
   if(keyval == GDK_KEY_Right)
     return KEY_RIGHT;
   if(keyval == GDK_KEY_Up)
@@ -184,7 +208,6 @@ static int keyval_to_keytype(guint keyval)
   return -1;
 }
 
-
 static void
 key_pressed (GtkEventControllerKey *controller,
              guint keyval,
@@ -192,12 +215,18 @@ key_pressed (GtkEventControllerKey *controller,
              GdkModifierType state,
              gpointer user_data)
 {
-  int keytype = keyval_to_keytype(keyval);
-  if(keytype > -1)
+    int keytype = keyval_to_keytype(keyval);
+    if(keytype > -1)
     key[keytype] = KEY_SEEN | KEY_RELEASED;
 
-//  if(keyval == GDK_KEY_Escape)
-//      gtk_window_close(GTK_WINDOW(app));
+    // Trigger window redraw
+    gtk_widget_queue_draw((GtkWidget*)user_data);
+
+    //  if(keyval == GDK_KEY_Escape)
+    //      gtk_window_close(GTK_WINDOW(app));
+
+    // DEGUB
+    debug_keytype(keyval, keycode);
 }
 
 static void
@@ -210,38 +239,38 @@ key_released (GtkEventControllerKey *controller,
   int keytype = keyval_to_keytype(keyval);
   if(keytype > -1)
     key[keytype] &= KEY_RELEASED;
+
+  // Trigger window redraw
+  gtk_widget_queue_draw((GtkWidget*)user_data);
+
+
+  // DEGUB
+  debug_keytype(keyval, keycode);
 }
 
 //////////////////////////////////////////////////////////////////////////////
-gboolean
-time_handler(GtkWidget* widget) {
-    gtk_widget_queue_draw(widget);
-
-    return TRUE;
-}
-
-
 static void
-app_activate (GApplication *app, gpointer user_data) {
+app_activate (GApplication *app, gpointer user_data)
+{
     GtkWidget *win;
-    GtkWidget *clock;
+    GtkWidget *drawable;
     GtkBuilder *build;
 
     build = gtk_builder_new_from_resource ("/com/github/ToshioCP/tfc/tfk.ui");
     win = GTK_WIDGET (gtk_builder_get_object (build, "win"));
     gtk_window_set_application (GTK_WINDOW (win), GTK_APPLICATION (app));
 
-    clock = GTK_WIDGET (gtk_builder_get_object (build, "clock"));
+    drawable = GTK_WIDGET (gtk_builder_get_object (build, "drawable"));
     g_object_unref(build);
 
     // --- add keyboard callback ---
     GtkEventController *keyboard = gtk_event_controller_key_new();
     gtk_widget_add_controller(win, keyboard);
-    g_signal_connect(keyboard, "key-pressed", G_CALLBACK(key_pressed), win);
-    g_signal_connect(keyboard, "key-released", G_CALLBACK(key_released), win);
+    g_signal_connect(keyboard, "key-pressed",  G_CALLBACK(key_pressed),  drawable);
+    g_signal_connect(keyboard, "key-released", G_CALLBACK(key_released), drawable);
 
-    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA (clock), draw_clock, NULL, NULL);
-    g_timeout_add(1000, (GSourceFunc) time_handler, (gpointer) clock);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA (drawable), draw_arrows, NULL, NULL);
+
     gtk_widget_show(win);
 
 }
